@@ -34,6 +34,7 @@ pub enum ShapeType {
 	Rectangle,
 	Ellipse,
 	Line,
+	QrCode, 
 }
 
 impl ShapeType {
@@ -48,6 +49,7 @@ impl ShapeType {
 			Self::Rectangle => "Rectangle",
 			Self::Ellipse => "Ellipse",
 			Self::Line => "Line",
+			Self::QrCode => "QrCode"
 		})
 		.into()
 	}

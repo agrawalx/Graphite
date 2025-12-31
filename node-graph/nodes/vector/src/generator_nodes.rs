@@ -1,7 +1,7 @@
 use core_types::Ctx;
 use core_types::registry::types::{Angle, PixelSize};
 use core_types::table::Table;
-use glam::DVec2;
+use glam::{DAffine2, DVec2};
 use graphic_types::Vector;
 use vector_types::subpath;
 use vector_types::vector::misc::{ArcType, AsU64, GridType};
@@ -311,6 +311,68 @@ fn grid<T: GridSpacing>(
 		}
 	}
 
+	Table::new_from_element(vector)
+}
+
+/// Generates a QR Code vector path from the given text.
+#[node_macro::node(category("Vector: Shape"), name("QR Code"))]
+fn qr_code(
+	_: impl Ctx,
+	_primary: (),
+	#[default("https://graphite.art")] text: String,
+	#[default("Medium")] error_correction: String,
+	#[unit(" px")]
+	#[default(100.)]
+	width: f64,
+) -> Table<Vector> {
+	// 1. Parse Error Correction Level
+	let ecc = match error_correction.to_uppercase().as_str() {
+		"LOW" | "L" => qrcodegen::QrCodeEcc::Low,
+		"HIGH" | "H" => qrcodegen::QrCodeEcc::High,
+		"QUARTILE" | "Q" => qrcodegen::QrCodeEcc::Quartile,
+		_ => qrcodegen::QrCodeEcc::Medium,
+	};
+
+	// 2. Generate the QR Code Data
+	// Fallback to a simple error string if encoding fails (e.g. text too long)
+	let qr = qrcodegen::QrCode::encode_text(&text, ecc).unwrap_or_else(|_| qrcodegen::QrCode::encode_text("Error", qrcodegen::QrCodeEcc::Low).unwrap());
+
+	let size = qr.size();
+	let module_size = width / size as f64;
+
+	// We will store every black square as a separate Subpath
+	let mut subpaths = Vec::new();
+
+	// 3. Convert to Vector Geometry
+	for y in 0..size {
+		for x in 0..size {
+			if qr.get_module(x,y) {
+				let x_pos = x as f64 * module_size;
+                let y_pos = y as f64 * module_size;
+
+                // Create a square for this specific module
+                let min = DVec2::new(x_pos, y_pos);
+                let max = min + DVec2::new(module_size, module_size);
+				let rect = subpath::Subpath::new_rounded_rect(min, max, [0.; 4]);
+				subpaths.push(rect);
+			}
+		}
+	}
+
+	// 4. Center the QR code around (0,0)
+	let total_width = size as f64 * module_size;
+	let offset = DVec2::splat(total_width / -2.);
+	let transform = DAffine2::from_translation(offset);
+
+	// Create a single Vector containing all subpaths
+	let mut vector = Vector::from_subpaths(subpaths, false);
+
+	// Apply the offset to every point in the vector
+	for (_, pos) in vector.point_domain.positions_mut() {
+		*pos = transform.transform_point2(*pos);
+	}
+
+	// Return the single vector
 	Table::new_from_element(vector)
 }
 

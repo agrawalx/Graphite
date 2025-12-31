@@ -21,6 +21,7 @@ dyn-any = { workspace = true }
 glam = { workspace = true }
 kurbo = { workspace = true }
 rand = { workspace = true }
+qrcodegen = { workspace = true }
 rustc-hash = { workspace = true }
 log = { workspace = true }
 

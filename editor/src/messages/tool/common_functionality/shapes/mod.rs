@@ -8,6 +8,7 @@ pub mod rectangle_shape;
 pub mod shape_utility;
 pub mod spiral_shape;
 pub mod star_shape;
+pub mod qrcode_shape;
 
 pub use super::shapes::ellipse_shape::Ellipse;
 pub use super::shapes::line_shape::{Line, LineEnd};
