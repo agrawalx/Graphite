@@ -46,6 +46,7 @@ pub struct ShapeToolOptions {
 	turns: f64,
 	qr_text: String,
 	qr_correction: String,
+	qr_scaled_size: f64,
 }
 
 impl Default for ShapeToolOptions {
@@ -62,6 +63,7 @@ impl Default for ShapeToolOptions {
 			grid_type: GridType::Rectangular,
 			qr_text: "https://graphite.art".to_string(),
 			qr_correction: "Medium".to_string(),
+			qr_scaled_size: 1.,
 		}
 	}
 }
@@ -82,6 +84,7 @@ pub enum ShapeOptionsUpdate {
 	GridType(GridType),
 	QrText(String),
 	QrCorrection(String),
+	QrScaledSize(f64),
 }
 
 #[impl_message(Message, ToolMessage, Shape)]
@@ -260,6 +263,54 @@ fn create_grid_type_widget(grid_type: GridType) -> WidgetInstance {
 	RadioInput::new(entries).selected_index(Some(grid_type as u32)).widget_instance()
 }
 
+fn create_qr_text_widget(qr_text: String) -> WidgetInstance {
+	TextInput::new(qr_text)
+		.tooltip_label("QR Code Content")
+		.on_update(|text_input: &TextInput| {
+			ShapeToolMessage::UpdateOptions {
+				options: ShapeOptionsUpdate::QrText(text_input.value.clone()),
+			}
+			.into()
+		})
+		.widget_instance()
+}
+
+fn create_qr_correction_widget(qr_correction: String) -> WidgetInstance {
+	let correction_levels = vec![("Low", "Low (7%)"), ("Medium", "Medium (15%)"), ("Quartile", "Quartile (25%)"), ("High", "High (30%)")];
+
+	let selected_index = correction_levels.iter().position(|(val, _)| *val == qr_correction).map(|i| i as u32);
+
+	let entries: Vec<MenuListEntry> = correction_levels
+		.into_iter()
+		.map(|(val, name)| {
+			MenuListEntry::new(val.to_string()).label(name.to_string()).on_commit(move |_| {
+				ShapeToolMessage::UpdateOptions {
+					options: ShapeOptionsUpdate::QrCorrection(val.to_string()),
+				}
+				.into()
+			})
+		})
+		.collect();
+
+	DropdownInput::new(vec![entries])
+		.selected_index(selected_index)
+		.tooltip_label("Error Correction Level")
+		.widget_instance()
+}
+
+fn create_qr_scaled_size_widget(qr_scaled_size: f64) -> WidgetInstance {
+	NumberInput::new(Some(qr_scaled_size))
+		.label("Scaled Size")
+		.min(1.)
+		.on_update(|number_input: &NumberInput| {
+			ShapeToolMessage::UpdateOptions {
+				options: ShapeOptionsUpdate::QrScaledSize(number_input.value.unwrap()),
+			}
+			.into()
+		})
+		.widget_instance()
+}
+
 impl LayoutHolder for ShapeTool {
 	fn layout(&self) -> Layout {
 		let mut widgets = vec![];
@@ -293,41 +344,13 @@ impl LayoutHolder for ShapeTool {
 		}
 
 		if self.options.shape_type == ShapeType::QrCode {
-			widgets.push(
-				TextInput::new(self.options.qr_text.clone())
-					.tooltip_label("QR Code Content")
-					.on_update(|text_input: &TextInput| {
-						ShapeToolMessage::UpdateOptions {
-							options: ShapeOptionsUpdate::QrText(text_input.value.clone()),
-						}
-						.into()
-					})
-					.widget_instance(),
-			);
+			widgets.push(create_qr_text_widget(self.options.qr_text.clone()));
 			widgets.push(Separator::new(SeparatorStyle::Related).widget_instance());
 
-			let correction_levels = vec![("Low", "Low (7%)"), ("Medium", "Medium (15%)"), ("Quartile", "Quartile (25%)"), ("High", "High (30%)")];
+			widgets.push(create_qr_correction_widget(self.options.qr_correction.clone()));
+			widgets.push(Separator::new(SeparatorStyle::Related).widget_instance());
 
-			let selected_index = correction_levels.iter().position(|(val, _)| *val == self.options.qr_correction).map(|i| i as u32);
-
-			let entries: Vec<MenuListEntry> = correction_levels
-				.into_iter()
-				.map(|(val, name)| {
-					MenuListEntry::new(val.to_string()).label(name.to_string()).on_commit(move |_| {
-						ShapeToolMessage::UpdateOptions {
-							options: ShapeOptionsUpdate::QrCorrection(val.to_string()),
-						}
-						.into()
-					})
-				})
-				.collect();
-
-			widgets.push(
-				DropdownInput::new(vec![entries])
-					.selected_index(selected_index)
-					.tooltip_label("Error Correction Level")
-					.widget_instance(),
-			);
+			widgets.push(create_qr_scaled_size_widget(self.options.qr_scaled_size));
 			widgets.push(Separator::new(SeparatorStyle::Unrelated).widget_instance());
 		}
 
@@ -446,6 +469,9 @@ impl<'a> MessageHandler<ToolMessage, &mut ToolActionMessageContext<'a>> for Shap
 			}
 			ShapeOptionsUpdate::QrCorrection(ecc) => {
 				self.options.qr_correction = ecc;
+			}
+			ShapeOptionsUpdate::QrScaledSize(size) => {
+				self.options.qr_scaled_size = size;
 			}
 		}
 
@@ -887,7 +913,7 @@ impl Fsm for ShapeToolFsmState {
 					ShapeType::Rectangle => Rectangle::create_node(),
 					ShapeType::Ellipse => Ellipse::create_node(),
 					ShapeType::Line => Line::create_node(document, tool_data.data.drag_start),
-					ShapeType::QrCode => QrCode::create_node(tool_options.qr_text.clone(), tool_options.qr_correction.clone()),
+					ShapeType::QrCode => QrCode::create_node(tool_options.qr_text.clone(), tool_options.qr_correction.clone(), tool_options.qr_scaled_size),
 				};
 
 				let nodes = vec![(NodeId(0), node)];
